@@ -1,63 +1,48 @@
 package com.hobbyspark.controller;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.Set;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.hobbyspark.config.JwtUtil;
-import com.hobbyspark.dto.UserInterestsRequest;
-import com.hobbyspark.model.User;
+import com.hobbyspark.dto.InterestsRequest;
+import com.hobbyspark.entity.Interest;
 import com.hobbyspark.service.InterestService;
-import com.hobbyspark.service.UserService;
-
-import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
-@RequestMapping("/interests")
+@RequestMapping("/api/interests")
 public class InterestController {
 
     private final InterestService interestService;
-    private final UserService userService;
-    private final JwtUtil jwtUtil;
 
-    public InterestController(InterestService interestService,
-                              UserService userService,
-                              JwtUtil jwtUtil) {
+    public InterestController(InterestService interestService) {
         this.interestService = interestService;
-        this.userService = userService;
-        this.jwtUtil = jwtUtil;
     }
 
-    private User getCurrentUser(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        String token = authHeader.substring(7);
-        UUID userId = jwtUtil.extractUserId(token);
-        return userService.findById(userId);
+    private Long getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Long) {
+            return (Long) auth.getPrincipal();
+        }
+        throw new RuntimeException("Пользователь не авторизован");
     }
 
-    @GetMapping("/all")
-    public ResponseEntity<List<String>> getAllInterests() {
-        // возвращаем список всех возможных интересов (например, для страницы выбора)
-        return ResponseEntity.ok(List.of("Творчество", "Спорт и Фитнес", "Технологии", "Языки", "Кулинария", "Сообщество"));
+    @GetMapping
+    public Set<Interest> getAll() {
+        // доступно всем, поэтому не требуется userId
+        return interestService.getAll();
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<List<String>> getMyInterests(HttpServletRequest request) {
-        User user = getCurrentUser(request);
-        return ResponseEntity.ok(interestService.getUserInterests(user));
-    }
-
-    @PutMapping("/me")
-    public ResponseEntity<?> updateMyInterests(@RequestBody UserInterestsRequest request,
-                                               HttpServletRequest servletRequest) {
-        User user = getCurrentUser(servletRequest);
-        interestService.saveUserInterests(user, request.getInterestNames());
+    @PostMapping
+    public ResponseEntity<Void> save(@RequestBody InterestsRequest req) {
+        Long userId = getCurrentUserId();
+        interestService.saveUserInterests(userId, req);
         return ResponseEntity.ok().build();
     }
 }

@@ -1,0 +1,24 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/hobbyspark
+    username: postgres
+    password: marsplutonraisa108
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  sql:
+    init:
+      mode: always
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  expiration: 86400000
+
+app:
+  uploads-dir: ./uploads
+  invite-link: "https://hobbyspark.app/download"
+  invite-text: "Приглашаю тебя в HobbySpark! Участвуй вместе со мной и открывай новые искры каждый день: {}"

@@ -1,64 +1,79 @@
 package com.hobbyspark.service;
 
-import java.util.UUID;
+import java.util.List;
+import java.util.stream.Collectors;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.hobbyspark.dto.UserResponse;
-import com.hobbyspark.model.User;
+import com.hobbyspark.dto.NoteResponse;
+import com.hobbyspark.dto.ProfileResponse;
+import com.hobbyspark.dto.UserChallengeResponse;
+import com.hobbyspark.entity.DayCompletion;
+import com.hobbyspark.entity.User;
+import com.hobbyspark.repository.DayCompletionRepository;
+import com.hobbyspark.repository.UserChallengeRepository;
 import com.hobbyspark.repository.UserRepository;
 
 @Service
 public class UserService {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepo;
+    private final UserChallengeRepository userChallengeRepo;
+    private final DayCompletionRepository dayCompletionRepo;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
+    public UserService(UserRepository userRepo,
+                       UserChallengeRepository userChallengeRepo,
+                       DayCompletionRepository dayCompletionRepo) {
+        this.userRepo = userRepo;
+        this.userChallengeRepo = userChallengeRepo;
+        this.dayCompletionRepo = dayCompletionRepo;
+    }
+
+    public ProfileResponse getProfile(Long userId) {
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+        return new ProfileResponse(user.getId(), user.getLogin(), user.getName(), user.isInterestsSelected());
     }
 
     @Transactional
-    public User register(String login, String password, String name) {
-        if (userRepository.existsByLogin(login)) {
-            throw new RuntimeException("Login already exists");
-        }
-        User user = new User();
-        user.setLogin(login);
-        user.setPassword(passwordEncoder.encode(password));
+    public void updateName(Long userId, String name) {
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
         user.setName(name);
-        return userRepository.save(user);
-    }
-
-    public User findByLogin(String login) {
-        return userRepository.findByLogin(login)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-    }
-
-    public User findById(UUID id) {
-        return userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        userRepo.save(user);
     }
 
     @Transactional
-    public User updateProfile(UUID userId, String name, String avatarUrl, String bio) {
-        User user = findById(userId);
-        if (name != null) user.setName(name);
-        if (avatarUrl != null) user.setAvatarUrl(avatarUrl);
-        if (bio != null) user.setBio(bio);
-        return userRepository.save(user);
+    public void deleteAccount(Long userId) {
+        userRepo.deleteById(userId);
     }
 
-    public UserResponse toResponse(User user) {
-        UserResponse response = new UserResponse();
-        response.setId(user.getId());
-        response.setName(user.getName());
-        response.setAvatarUrl(user.getAvatarUrl());
-        response.setBio(user.getBio());
-        response.setCreatedAt(user.getCreatedAt());
-        return response;
+    public UserChallengeResponse getActiveChallenge(Long userId) {
+        return userChallengeRepo.findByUserIdAndCompletedFalse(userId)
+                .map(uc -> new UserChallengeResponse(
+                        uc.getChallenge().getId(),
+                        uc.getChallenge().getTitle(),
+                        uc.getCurrentDay(),
+                        uc.getTotalDays(),
+                        uc.isCompleted()
+                ))
+                .orElse(null);
     }
+
+    public List<NoteResponse> getNotes(Long userId) {
+    List<DayCompletion> completions = dayCompletionRepo.findByUserIdOrderByCompletedAtDesc(userId);
+    return completions.stream()
+            .map(dc -> {
+                String challengeTitle = dc.getChallenge().getTitle();
+                return new NoteResponse(
+                        "День " + dc.getDayNumber(),
+                        dc.getNoteText() != null ? dc.getNoteText() : "",
+                        dc.getPhotoPath(),
+                        dc.getCompletedAt(),
+                        challengeTitle
+                );
+            })
+            .collect(Collectors.toList());
+}
 }
